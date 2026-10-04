@@ -36,6 +36,11 @@
 
   <h2>Kaamerapilt mängualaga</h2>
   <canvas id="canvas">Sinu brauser ei toeta canvas-elementi.</canvas>
+  <p>Aseta paberile joonistatud mängulaud abiruudustiku järgi paika.
+    Värviline nupp peab katma ruudu keskel oleva väikese mõõteala.</p>
+
+  <h2>Tuvastatud mänguseis</h2>
+  <pre id="tulemused" aria-label="Üheksa ruudu tuvastatud värvid"></pre>
 
   <script>
     // Leiame HTML-elemendid, mida JavaScriptis kasutame.
@@ -44,8 +49,19 @@
     const kontekst = canvas.getContext('2d');
     const kaameraNupp = document.getElementById('kaameraNupp');
     const teade = document.getElementById('teade');
+    const tulemused = document.getElementById('tulemused');
+
+    // Massiivi kohad 0–8 vastavad ruutudele 1–9.
+    // S = sinine, O = oranž, tühi tekst = tühi ruut.
+    let mangulaud = ["", "", "", "", "", "", "", "", ""];
+
+    // RGB väärtused on 0–255. Neid vahesid saab päris kaamera järgi muuta.
+    const siniseVahe = 40;
+    const oranziPunaseVahe = 30;
+    const oranziRoheliseVahe = 20;
 
     kaameraNupp.addEventListener('click', kaivitaKaamera);
+    kuvaSeis();
 
     async function kaivitaKaamera() {
       // Väldime korduvat käivitamist, kuni kaamera loa küsimine kestab.
@@ -97,14 +113,18 @@
 
         // Uus kaamerakaader katab eelmise pildi ja vana ruudustiku.
         kontekst.drawImage(video, 0, 0, canvas.width, canvas.height);
-        joonistaManguala();
+        const ala = leiaManguala();
+
+        // Loeme puhta kaamerapildi pikslid ENNE abijoonte ja numbrite lisamist.
+        tuvastaVarvid(ala);
+        joonistaManguala(ala);
       }
 
       // Brauser kutsub sama funktsiooni uuesti järgmise kaadri jaoks.
       requestAnimationFrame(joonistaKaader);
     }
 
-    function joonistaManguala() {
+    function leiaManguala() {
       // Ruudu külg on 80% pildi lühemast küljest: kogu mänguala mahub pildile.
       const suurus = Math.min(canvas.width, canvas.height) * 0.8;
       const ruuduSuurus = suurus / 3;
@@ -113,6 +133,81 @@
       const algusX = (canvas.width - suurus) / 2;
       const algusY = (canvas.height - suurus) / 2;
 
+      // Mõõteala külg on 20% ühe mänguruudu küljest.
+      const mooteSuurus = Math.max(1, Math.floor(ruuduSuurus * 0.2));
+      return { suurus, ruuduSuurus, algusX, algusY, mooteSuurus };
+    }
+
+    function leiaMooteala(ala, rida, veerg) {
+      const keskX = ala.algusX + (veerg + 0.5) * ala.ruuduSuurus;
+      const keskY = ala.algusY + (rida + 0.5) * ala.ruuduSuurus;
+
+      // Täisarvulised koordinaadid: loeme ja näitame täpselt sama ala.
+      const x = Math.floor(keskX - ala.mooteSuurus / 2);
+      const y = Math.floor(keskY - ala.mooteSuurus / 2);
+      return { x, y };
+    }
+
+    function tuvastaVarvid(ala) {
+      for (let rida = 0; rida < 3; rida++) {
+        for (let veerg = 0; veerg < 3; veerg++) {
+          const koht = leiaMooteala(ala, rida, veerg);
+          const pikslid = kontekst.getImageData(
+            koht.x, koht.y, ala.mooteSuurus, ala.mooteSuurus
+          ).data;
+
+          let summaR = 0;
+          let summaG = 0;
+          let summaB = 0;
+
+          // Iga piksel koosneb neljast arvust: R, G, B ja läbipaistvus.
+          // Läbipaistvust ei ole värvi määramiseks vaja.
+          for (let i = 0; i < pikslid.length; i += 4) {
+            summaR += pikslid[i];
+            summaG += pikslid[i + 1];
+            summaB += pikslid[i + 2];
+          }
+
+          const arv = pikslid.length / 4;
+          const R = summaR / arv;
+          const G = summaG / arv;
+          const B = summaB / arv;
+          mangulaud[rida * 3 + veerg] = maaraVarv(R, G, B);
+        }
+      }
+      kuvaSeis();
+    }
+
+    function maaraVarv(R, G, B) {
+      // SININE: sinine kanal on mõlemast teisest kanalist selgelt suurem.
+      if (B > R + siniseVahe && B > G + siniseVahe) {
+        return 'S';
+      }
+
+      // ORANŽ: punane on rohelisest ning roheline sinisest suurem.
+      if (R > G + oranziPunaseVahe && G > B + oranziRoheliseVahe) {
+        return 'O';
+      }
+
+      // Kõik ülejäänud värvid, sealhulgas valge paber, tähendavad TÜHI.
+      return '';
+    }
+
+    function kuvaSeis() {
+      const nimetused = { S: 'SININE', O: 'ORANŽ', '': 'TÜHI' };
+      const read = mangulaud.map(function (varv, indeks) {
+        return (indeks + 1) + ': ' + nimetused[varv];
+      });
+      const tekst = read.join('\n');
+
+      // Muudame lehel teksti ainult siis, kui tuvastatud seis muutub.
+      if (tulemused.textContent !== tekst) {
+        tulemused.textContent = tekst;
+      }
+    }
+
+    function joonistaManguala(ala) {
+      const { suurus, ruuduSuurus, algusX, algusY } = ala;
       kontekst.beginPath();
 
       // Neli püstist ja neli rõhtsat joont annavad üheksa võrdset ruutu.
@@ -146,10 +241,22 @@
         for (let veerg = 0; veerg < 3; veerg++) {
           const number = rida * 3 + veerg + 1;
           const x = algusX + (veerg + 0.5) * ruuduSuurus;
-          const y = algusY + (rida + 0.5) * ruuduSuurus;
+          // Number asub keskosast kõrgemal, et mõõteala jääks nähtavaks.
+          const y = algusY + (rida + 0.2) * ruuduSuurus;
 
+          kontekst.strokeStyle = 'black';
+          kontekst.lineWidth = 4;
           kontekst.strokeText(String(number), x, y);
           kontekst.fillText(String(number), x, y);
+
+          // Joonistame mõõteala ainult äärena: kaamerapilt jääb seest nähtavaks.
+          const koht = leiaMooteala(ala, rida, veerg);
+          kontekst.strokeStyle = 'black';
+          kontekst.lineWidth = 4;
+          kontekst.strokeRect(koht.x, koht.y, ala.mooteSuurus, ala.mooteSuurus);
+          kontekst.strokeStyle = 'yellow';
+          kontekst.lineWidth = 2;
+          kontekst.strokeRect(koht.x, koht.y, ala.mooteSuurus, ala.mooteSuurus);
         }
       }
     }
