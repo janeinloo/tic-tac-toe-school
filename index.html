@@ -15,6 +15,39 @@
       padding: 10px 16px;
     }
 
+    /* Lühikesed juhised on ka telefonis hästi loetavad. */
+    .juhised {
+      max-width: 600px;
+      box-sizing: border-box;
+      padding: 16px;
+      margin-bottom: 16px;
+      background: #f2f6fa;
+      border: 1px solid #b8c5d1;
+      font-size: 18px;
+      line-height: 1.5;
+    }
+
+    .juhised h2 {
+      margin-top: 0;
+    }
+
+    .juhised li {
+      margin-bottom: 8px;
+    }
+
+    /* Käigusoovitus ja mängu tulemus paistavad tavalisest tekstist välja. */
+    #serveriTeade {
+      max-width: 600px;
+      box-sizing: border-box;
+      font-size: 22px;
+      font-weight: bold;
+      line-height: 1.5;
+      padding: 16px;
+      color: #172b4d;
+      background: #fff5d6;
+      border: 2px solid #856000;
+    }
+
     /* Mõlemad pildid mahuvad ka telefoni ekraanile. */
     video, canvas {
       display: block;
@@ -27,6 +60,19 @@
 </head>
 <body>
   <h1>Trips-Traps-Trull kaameraga</h1>
+  <section class="juhised" aria-labelledby="juhistePealkiri">
+    <h2 id="juhistePealkiri">Kuidas mängida?</h2>
+    <p><strong>Sina mängid SINISEGA ja alustad mängu.</strong></p>
+    <ol>
+      <li>Aseta SININE nupp vabasse ruutu.</li>
+      <li>Oota, kuni kaamera tuvastab mänguseisu.</li>
+      <li>Vajuta nuppu „Küsi arvuti käiku“.</li>
+      <li>Aseta ORANŽ nupp ruutu, mida arvuti soovitab.</li>
+      <li>Seejärel tee järgmine SININE käik.</li>
+    </ol>
+    <p>Uue mängu alustamiseks eemalda kõik SINISED ja ORANŽID nupud mängulaualt.
+      Oota, kuni kaamera näitab kõiki ruute TÜHJANA.</p>
+  </section>
   <button id="kaameraNupp" type="button">Käivita kaamera</button>
   <p id="teade" role="status">Vajuta nuppu ja luba brauseril kaamerat kasutada.</p>
 
@@ -42,8 +88,8 @@
   <h2>Tuvastatud mänguseis</h2>
   <pre id="tulemused" aria-label="Üheksa ruudu tuvastatud värvid"></pre>
 
-  <button id="saadaNupp" type="button">Saada mänguseis serverisse</button>
-  <p id="serveriTeade" role="status">Mänguseis saadetakse ainult nupuvajutuse järel.</p>
+  <button id="saadaNupp" type="button">Küsi arvuti käiku</button>
+  <p id="serveriTeade" role="status">Pärast SINIST käiku vajuta „Küsi arvuti käiku“.</p>
 
   <script>
     const SERVERI_URL = 'https://script.google.com/macros/s/AKfycbzHaSySThymhOgwdfLol4fOWVnxnhv-EO9z8kGGQzfa2pERWJooSvsP5WJ6wftgdKhXQQ/exec';
