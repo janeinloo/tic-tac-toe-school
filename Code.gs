@@ -29,11 +29,60 @@ function doPost(e) {
     }
 
     Logger.log("Saadud mänguseis: " + JSON.stringify(mangulaud))
+
+    let siniseid = 0
+    let oranze = 0
+    for (let i = 0; i < mangulaud.length; i++) {
+      if (mangulaud[i] === "S") siniseid++
+      if (mangulaud[i] === "O") oranze++
+    }
+
+    // Sinine alustab: nuppude arv on võrdne või siniseid on üks rohkem.
+    if (siniseid !== oranze && siniseid !== oranze + 1) {
+      throw new Error("Nuppude arv ei vasta mängukorrale.")
+    }
+
+    const sinineVoitis = kasOnVoit(mangulaud, "S")
+    const oranzVoitis = kasOnVoit(mangulaud, "O")
+    if (sinineVoitis && oranzVoitis) {
+      throw new Error("Mõlemal mängijal ei saa korraga olla võitu.")
+    }
+    // Võit peab sobima viimase käigu tegija nuppude arvuga.
+    if (
+      (sinineVoitis && siniseid !== oranze + 1) ||
+      (oranzVoitis && siniseid !== oranze)
+    ) {
+      throw new Error("Võitja ja nuppude arv ei sobi kokku.")
+    }
+
+    const voitja = kontrolliVoitjat(mangulaud)
+    if (voitja === "S") {
+      return jsonVastus(true, "Mäng läbi – SININE võitis!", null, "S_VOIT")
+    }
+    if (voitja === "O") {
+      return jsonVastus(true, "Mäng läbi – ORANŽ võitis!", null, "O_VOIT")
+    }
+
+    // Täis laud on viik ainult siis, kui võitjat ei ole.
+    if (siniseid + oranze === 9) {
+      return jsonVastus(true, "Mäng läbi – viik!", null, "VIIK")
+    }
+    if (siniseid === oranze) {
+      return jsonVastus(
+        true,
+        "Tee kõigepealt SININE käik ja saada mänguseis uuesti serverisse.",
+        null,
+        "INIMESE_KAIK",
+      )
+    }
+
+    // Käigusoovitus arvutatakse ainult siis, kui on oranži kord.
     const arvutiKaik = arvutaArvutiKaik(mangulaud)
     return jsonVastus(
       true,
       "Server sai mänguseisu kätte: " + mangulaud.join(","),
       arvutiKaik,
+      "ARVUTI_KAIK",
     )
   } catch (viga) {
     return jsonVastus(
@@ -44,10 +93,49 @@ function doPost(e) {
 }
 
 // Ühesugune JSON-vastus nii õnnestumise kui ka vea korral.
-function jsonVastus(ok, teade, arvutiKaik = null) {
+function jsonVastus(ok, teade, arvutiKaik = null, olek = "VIGANE_SEIS") {
   return ContentService.createTextOutput(
-    JSON.stringify({ ok: ok, teade: teade, arvutiKaik: arvutiKaik }),
+    JSON.stringify({
+      ok: ok,
+      teade: teade,
+      arvutiKaik: arvutiKaik,
+      olek: olek,
+    }),
   ).setMimeType(ContentService.MimeType.JSON)
+}
+
+// Mõlemad võidukontrollid kasutavad samu kaheksat kombinatsiooni.
+// Siin on massiivi indeksid 0–8; kasutajale kuvatavad ruudud on 1–9.
+const voidukombinatsioonid = [
+  [0, 1, 2],
+  [3, 4, 5],
+  [6, 7, 8], // read
+  [0, 3, 6],
+  [1, 4, 7],
+  [2, 5, 8], // veerud
+  [0, 4, 8],
+  [2, 4, 6], // diagonaalid
+]
+
+function kasOnVoit(mangulaud, mangija) {
+  for (let i = 0; i < voidukombinatsioonid.length; i++) {
+    const rida = voidukombinatsioonid[i]
+    if (
+      mangulaud[rida[0]] === mangija &&
+      mangulaud[rida[1]] === mangija &&
+      mangulaud[rida[2]] === mangija
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
+// Mõlema mängija korraga võitmine kontrollitakse doPost-is vigaseks seisuks.
+function kontrolliVoitjat(mangulaud) {
+  if (kasOnVoit(mangulaud, "S")) return "S"
+  if (kasOnVoit(mangulaud, "O")) return "O"
+  return null
 }
 
 // Tagastame ruudu numbri 1–9. Sisendmassiiivi me ei muuda.
@@ -90,17 +178,7 @@ function arvutaArvutiKaik(mangulaud) {
 
 // Otsime kombinatsiooni, kus on kaks sama mängija nuppu ja üks tühi ruut.
 function leiaVoiduKaik(mangulaud, mangija) {
-  // Kombinatsioonid kasutavad massiivi indekseid 0–8, mitte ruudunumbreid.
-  const kombinatsioonid = [
-    [0, 1, 2],
-    [3, 4, 5],
-    [6, 7, 8], // read
-    [0, 3, 6],
-    [1, 4, 7],
-    [2, 5, 8], // veerud
-    [0, 4, 8],
-    [2, 4, 6], // diagonaalid
-  ]
+  const kombinatsioonid = voidukombinatsioonid
 
   for (let i = 0; i < kombinatsioonid.length; i++) {
     const kombinatsioon = kombinatsioonid[i]

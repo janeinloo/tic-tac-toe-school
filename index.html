@@ -46,7 +46,6 @@
   <p id="serveriTeade" role="status">Mänguseis saadetakse ainult nupuvajutuse järel.</p>
 
   <script>
-    // Asenda see pärast Apps Scripti avaldamist Web Appi /exec-aadressiga.
     const SERVERI_URL = 'https://script.google.com/macros/s/AKfycbzHaSySThymhOgwdfLol4fOWVnxnhv-EO9z8kGGQzfa2pERWJooSvsP5WJ6wftgdKhXQQ/exec';
 
     // Leiame HTML-elemendid, mida JavaScriptis kasutame.
@@ -69,7 +68,6 @@
     const kaadriteArv = [0, 0, 0, 0, 0, 0, 0, 0, 0];
     const kinnitamiseksKaadreid = 5;
 
-    // RGB väärtused on 0–255. Neid vahesid saab päris kaamera järgi muuta.
     const siniseVahe = 40;
     const oranziPunaseVahe = 30;
     const oranziRoheliseVahe = 20;
@@ -107,22 +105,34 @@
         if (typeof andmed.ok !== 'boolean' || typeof andmed.teade !== 'string') {
           throw new Error('Serveri vastus ei ole oodatud kujul. Kontrolli Web Appi URL-i ja avaldatud versiooni.');
         }
-        if (!andmed.ok) {
+        // Vigase mänguseisu teade kuvatakse samuti serveri oleku järgi.
+        if (!andmed.ok && andmed.olek !== 'VIGANE_SEIS') {
           throw new Error(andmed.teade);
         }
 
         // Server soovitab ruutu; oranži nupu asetab sellele kasutaja ise.
         let soovitus;
-        if (andmed.arvutiKaik === null) {
-          soovitus = 'Arvutil ei ole võimalik käiku teha.';
-        } else if (Number.isInteger(andmed.arvutiKaik) &&
-                   andmed.arvutiKaik >= 1 && andmed.arvutiKaik <= 9) {
+        if (andmed.olek === 'ARVUTI_KAIK') {
+          if (!Number.isInteger(andmed.arvutiKaik) ||
+              andmed.arvutiKaik < 1 || andmed.arvutiKaik > 9) {
+            throw new Error('Server tagastas vigase arvuti käigu.');
+          }
           soovitus = 'Arvuti soovitab panna ORANŽI ruutu ' + andmed.arvutiKaik + '.';
+        } else if (andmed.olek === 'INIMESE_KAIK') {
+          soovitus = 'Tee kõigepealt SININE käik ja saada mänguseis uuesti serverisse.';
+        } else if (andmed.olek === 'S_VOIT') {
+          soovitus = 'Mäng läbi – SININE võitis!';
+        } else if (andmed.olek === 'O_VOIT') {
+          soovitus = 'Mäng läbi – ORANŽ võitis!';
+        } else if (andmed.olek === 'VIIK') {
+          soovitus = 'Mäng läbi – viik!';
+        } else if (andmed.olek === 'VIGANE_SEIS') {
+          soovitus = 'Mänguseis ei ole korrektne. ' + andmed.teade;
         } else {
-          throw new Error('Serveri vastuses puudub korrektne arvutiKaik. Avalda Apps Scripti uus versioon.');
+          throw new Error('Serveri vastuses puudub korrektne olek. Avalda Apps Scripti uus versioon.');
         }
 
-        serveriTeade.textContent = 'Saatmine õnnestus. ' + andmed.teade + ' ' + soovitus;
+        serveriTeade.textContent = soovitus;
       } catch (viga) {
         serveriTeade.textContent = 'Saatmist ei saanud kinnitada: ' + viga.message +
           ' Kontrolli internetiühendust, /exec-aadressi ja Web Appi ligipääsu „Anyone”.';
