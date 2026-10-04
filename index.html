@@ -55,6 +55,12 @@
     // S = sinine, O = oranž, tühi tekst = tühi ruut.
     let mangulaud = ["", "", "", "", "", "", "", "", ""];
 
+    // Igal ruudul on oma viimati nähtud värv ja järjestikuste kaadrite arv.
+    // Alguses pole üheski ruudus veel ühtegi kaadrit loetud.
+    const viimasedVarvid = ['', '', '', '', '', '', '', '', ''];
+    const kaadriteArv = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+    const kinnitamiseksKaadreid = 5;
+
     // RGB väärtused on 0–255. Neid vahesid saab päris kaamera järgi muuta.
     const siniseVahe = 40;
     const oranziPunaseVahe = 30;
@@ -172,7 +178,25 @@
           const R = summaR / arv;
           const G = summaG / arv;
           const B = summaB / arv;
-          mangulaud[rida * 3 + veerg] = maaraVarv(R, G, B);
+          const indeks = rida * 3 + veerg;
+          const varv = maaraVarv(R, G, B);
+
+          if (varv === viimasedVarvid[indeks]) {
+            // Sama värv jätkab selle ruudu loendust. Viie juures piisab.
+            if (kaadriteArv[indeks] < kinnitamiseksKaadreid) {
+              kaadriteArv[indeks]++;
+            }
+          } else {
+            // Teine värv katkestab eelmise jada ja on uue jada esimene kaader.
+            viimasedVarvid[indeks] = varv;
+            kaadriteArv[indeks] = 1;
+          }
+
+          // Lehel kuvatav kinnitatud seis muutub alles viie sama kaadri järel.
+          // Ka tühi tekst ('') kinnitatakse: eemaldatud nupp jätab ruudu TÜHJAKS.
+          if (kaadriteArv[indeks] >= kinnitamiseksKaadreid) {
+            mangulaud[indeks] = varv;
+          }
         }
       }
       kuvaSeis();
