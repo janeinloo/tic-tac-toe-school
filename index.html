@@ -111,7 +111,18 @@
           throw new Error(andmed.teade);
         }
 
-        serveriTeade.textContent = 'Saatmine õnnestus. ' + andmed.teade;
+        // Server soovitab ruutu; oranži nupu asetab sellele kasutaja ise.
+        let soovitus;
+        if (andmed.arvutiKaik === null) {
+          soovitus = 'Arvutil ei ole võimalik käiku teha.';
+        } else if (Number.isInteger(andmed.arvutiKaik) &&
+                   andmed.arvutiKaik >= 1 && andmed.arvutiKaik <= 9) {
+          soovitus = 'Arvuti soovitab panna ORANŽI ruutu ' + andmed.arvutiKaik + '.';
+        } else {
+          throw new Error('Serveri vastuses puudub korrektne arvutiKaik. Avalda Apps Scripti uus versioon.');
+        }
+
+        serveriTeade.textContent = 'Saatmine õnnestus. ' + andmed.teade + ' ' + soovitus;
       } catch (viga) {
         serveriTeade.textContent = 'Saatmist ei saanud kinnitada: ' + viga.message +
           ' Kontrolli internetiühendust, /exec-aadressi ja Web Appi ligipääsu „Anyone”.';
