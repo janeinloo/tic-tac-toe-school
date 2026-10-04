@@ -1,3 +1,7 @@
+// Asenda placeholder oma olemasoleva Google Sheetsi faili ID-ga.
+const SHEET_ID = "1Y9X40DOOqllHw7FYNz8cJLiUvd-vRtvHxtGOLh4oZWA"
+const SHEET_NAME = "Manguseisud"
+
 // Google Apps Script käivitab selle funktsiooni, kui veebirakendus avatakse.
 function doGet() {
   // Apps Scriptis on HTML-faili nimi „leht” (siin projektis leht.html).
@@ -57,17 +61,21 @@ function doPost(e) {
 
     const voitja = kontrolliVoitjat(mangulaud)
     if (voitja === "S") {
+      salvestaManguseis(mangulaud, "S_VOIT", null)
       return jsonVastus(true, "Mäng läbi – SININE võitis!", null, "S_VOIT")
     }
     if (voitja === "O") {
+      salvestaManguseis(mangulaud, "O_VOIT", null)
       return jsonVastus(true, "Mäng läbi – ORANŽ võitis!", null, "O_VOIT")
     }
 
     // Täis laud on viik ainult siis, kui võitjat ei ole.
     if (siniseid + oranze === 9) {
+      salvestaManguseis(mangulaud, "VIIK", null)
       return jsonVastus(true, "Mäng läbi – viik!", null, "VIIK")
     }
     if (siniseid === oranze) {
+      salvestaManguseis(mangulaud, "INIMESE_KAIK", null)
       return jsonVastus(
         true,
         "Tee kõigepealt SININE käik ja saada mänguseis uuesti serverisse.",
@@ -78,6 +86,7 @@ function doPost(e) {
 
     // Käigusoovitus arvutatakse ainult siis, kui on oranži kord.
     const arvutiKaik = arvutaArvutiKaik(mangulaud)
+    salvestaManguseis(mangulaud, "ARVUTI_KAIK", arvutiKaik)
     return jsonVastus(
       true,
       "Server sai mänguseisu kätte: " + mangulaud.join(","),
@@ -90,6 +99,45 @@ function doPost(e) {
       "Mänguseisu vastuvõtmine ebaõnnestus: " + viga.message,
     )
   }
+}
+
+// Lisame olemasolevasse serveritabelisse ühe rea iga korrektse päringu kohta.
+function salvestaManguseis(mangulaud, olek, arvutiKaik) {
+  if (SHEET_ID === "SIIA_GOOGLE_SHEETSI_ID") {
+    throw new Error("Lisa SHEET_ID konstanti oma Google Sheetsi faili ID.")
+  }
+
+  const tabel = SpreadsheetApp.openById(SHEET_ID)
+  const leht = tabel.getSheetByName(SHEET_NAME)
+  if (!leht) {
+    throw new Error('Google Sheetsis puudub leht nimega "' + SHEET_NAME + '".')
+  }
+
+  // Päise lisame ainult täiesti tühjale lehele. Olemasolevaid ridu ei muudeta.
+  if (leht.getLastRow() === 0) {
+    leht.appendRow([
+      "Aeg",
+      "Ruut 1",
+      "Ruut 2",
+      "Ruut 3",
+      "Ruut 4",
+      "Ruut 5",
+      "Ruut 6",
+      "Ruut 7",
+      "Ruut 8",
+      "Ruut 9",
+      "Olek",
+      "Arvuti käik",
+    ])
+  }
+
+  // Rea 12 lahtrit: aeg, üheksa ruutu, olek ja käigusoovitus.
+  // Tühjad ruudud ning null-käik salvestatakse tühja lahtrina.
+  const rida = [new Date()].concat(mangulaud, [
+    olek,
+    arvutiKaik === null ? "" : arvutiKaik,
+  ])
+  leht.appendRow(rida)
 }
 
 // Ühesugune JSON-vastus nii õnnestumise kui ka vea korral.
