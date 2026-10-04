@@ -42,7 +42,13 @@
   <h2>Tuvastatud mänguseis</h2>
   <pre id="tulemused" aria-label="Üheksa ruudu tuvastatud värvid"></pre>
 
+  <button id="saadaNupp" type="button">Saada mänguseis serverisse</button>
+  <p id="serveriTeade" role="status">Mänguseis saadetakse ainult nupuvajutuse järel.</p>
+
   <script>
+    // Asenda see pärast Apps Scripti avaldamist Web Appi /exec-aadressiga.
+    const SERVERI_URL = 'https://script.google.com/macros/s/AKfycbzHaSySThymhOgwdfLol4fOWVnxnhv-EO9z8kGGQzfa2pERWJooSvsP5WJ6wftgdKhXQQ/exec';
+
     // Leiame HTML-elemendid, mida JavaScriptis kasutame.
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
@@ -50,6 +56,8 @@
     const kaameraNupp = document.getElementById('kaameraNupp');
     const teade = document.getElementById('teade');
     const tulemused = document.getElementById('tulemused');
+    const saadaNupp = document.getElementById('saadaNupp');
+    const serveriTeade = document.getElementById('serveriTeade');
 
     // Massiivi kohad 0–8 vastavad ruutudele 1–9.
     // S = sinine, O = oranž, tühi tekst = tühi ruut.
@@ -67,7 +75,50 @@
     const oranziRoheliseVahe = 20;
 
     kaameraNupp.addEventListener('click', kaivitaKaamera);
+    saadaNupp.addEventListener('click', saadaManguseis);
     kuvaSeis();
+
+    async function saadaManguseis() {
+      if (SERVERI_URL === 'SIIA_APPS_SCRIPT_WEB_APP_URL') {
+        serveriTeade.textContent = 'Lisa kõigepealt SERVERI_URL konstanti Apps Scripti Web Appi aadress.';
+        return;
+      }
+
+      saadaNupp.disabled = true;
+      serveriTeade.textContent = 'Saadan mänguseisu serverisse…';
+
+      try {
+        // JSON.stringify salvestab nupuvajutuse hetkel kinnitatud mänguseisu.
+        // text/plain väldib eri päritoluga päringu OPTIONS-eelpäringut.
+        const vastus = await fetch(SERVERI_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+          body: JSON.stringify({ mangulaud: mangulaud }),
+          credentials: 'omit',
+          redirect: 'follow'
+        });
+
+        if (!vastus.ok) {
+          throw new Error('Serveri HTTP veakood: ' + vastus.status);
+        }
+
+        // Loeme serveri kinnitust; saatmine üksi ei tõesta vastuvõtmist.
+        const andmed = await vastus.json();
+        if (typeof andmed.ok !== 'boolean' || typeof andmed.teade !== 'string') {
+          throw new Error('Serveri vastus ei ole oodatud kujul. Kontrolli Web Appi URL-i ja avaldatud versiooni.');
+        }
+        if (!andmed.ok) {
+          throw new Error(andmed.teade);
+        }
+
+        serveriTeade.textContent = 'Saatmine õnnestus. ' + andmed.teade;
+      } catch (viga) {
+        serveriTeade.textContent = 'Saatmist ei saanud kinnitada: ' + viga.message +
+          ' Kontrolli internetiühendust, /exec-aadressi ja Web Appi ligipääsu „Anyone”.';
+      } finally {
+        saadaNupp.disabled = false;
+      }
+    }
 
     async function kaivitaKaamera() {
       // Väldime korduvat käivitamist, kuni kaamera loa küsimine kestab.
