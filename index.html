@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="et">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trips-Traps-Trull kaameraga</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 16px;
+    }
+
+    button {
+      font-size: 18px;
+      padding: 10px 16px;
+    }
+
+    /* Mõlemad pildid mahuvad ka telefoni ekraanile. */
+    video, canvas {
+      display: block;
+      width: 100%;
+      max-width: 600px;
+      height: auto;
+      background: #222;
+    }
+  </style>
+</head>
+<body>
+  <h1>Trips-Traps-Trull kaameraga</h1>
+  <button id="kaameraNupp" type="button">Käivita kaamera</button>
+  <p id="teade" role="status">Vajuta nuppu ja luba brauseril kaamerat kasutada.</p>
+
+  <h2>Kaamerapilt</h2>
+  <!-- playsinline hoiab video telefonis lehe sees. Heli ei küsita. -->
+  <video id="video" autoplay playsinline muted></video>
+
+  <h2>Kaamerapilt mängualaga</h2>
+  <canvas id="canvas">Sinu brauser ei toeta canvas-elementi.</canvas>
+
+  <script>
+    // Leiame HTML-elemendid, mida JavaScriptis kasutame.
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const kontekst = canvas.getContext('2d');
+    const kaameraNupp = document.getElementById('kaameraNupp');
+    const teade = document.getElementById('teade');
+
+    kaameraNupp.addEventListener('click', kaivitaKaamera);
+
+    async function kaivitaKaamera() {
+      // Väldime korduvat käivitamist, kuni kaamera loa küsimine kestab.
+      kaameraNupp.disabled = true;
+      teade.textContent = 'Ootan kaamera kasutamise luba…';
+
+      try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error('Brauser ei toeta kaamera kasutamist. Ava rakendus HTTPS-aadressil sobivas brauseris.');
+        }
+
+        // getUserMedia küsib kasutajalt loa.
+        // „environment” eelistab tagumist kaamerat, kuid lubab ka muud kaamerat.
+        const voog = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' },
+          audio: false
+        });
+
+        // Näitame kaameravoogu video-elemendis.
+        video.srcObject = voog;
+        await video.play();
+
+        teade.textContent = 'Kaamera töötab. Suuna mängulaud ruudustiku sisse.';
+        joonistaKaader();
+      } catch (viga) {
+        // Näiteks võib kasutaja loa keelata või kaamera olla hõivatud.
+        teade.textContent = 'Kaamera käivitamine ebaõnnestus: ' + viga.message;
+        kaameraNupp.disabled = false;
+
+        // Kui video käivitamine ebaõnnestus, vabastame juba avatud kaamera.
+        if (video.srcObject) {
+          video.srcObject.getTracks().forEach(function (rada) {
+            rada.stop();
+          });
+          video.srcObject = null;
+        }
+      }
+    }
+
+    function joonistaKaader() {
+      // Joonistame alles siis, kui video mõõtmed ja pilt on olemas.
+      if (video.readyState >= 2) {
+        // Canvas kasutab kaamerapildiga samu mõõtmeid.
+        // Mõõtmeid uuendame ainult siis, kui need muutuvad.
+        if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+        }
+
+        // Uus kaamerakaader katab eelmise pildi ja vana ruudustiku.
+        kontekst.drawImage(video, 0, 0, canvas.width, canvas.height);
+        joonistaManguala();
+      }
+
+      // Brauser kutsub sama funktsiooni uuesti järgmise kaadri jaoks.
+      requestAnimationFrame(joonistaKaader);
+    }
+
+    function joonistaManguala() {
+      // Ruudu külg on 80% pildi lühemast küljest: kogu mänguala mahub pildile.
+      const suurus = Math.min(canvas.width, canvas.height) * 0.8;
+      const ruuduSuurus = suurus / 3;
+
+      // Vasak ülanurk arvutatakse nii, et mänguala jääks pildi keskele.
+      const algusX = (canvas.width - suurus) / 2;
+      const algusY = (canvas.height - suurus) / 2;
+
+      kontekst.beginPath();
+
+      // Neli püstist ja neli rõhtsat joont annavad üheksa võrdset ruutu.
+      for (let i = 0; i <= 3; i++) {
+        const x = algusX + i * ruuduSuurus;
+        const y = algusY + i * ruuduSuurus;
+
+        kontekst.moveTo(x, algusY);
+        kontekst.lineTo(x, algusY + suurus);
+        kontekst.moveTo(algusX, y);
+        kontekst.lineTo(algusX + suurus, y);
+      }
+
+      // Must äär ja valge joon on nähtavad nii heledal kui tumedal taustal.
+      kontekst.strokeStyle = 'black';
+      kontekst.lineWidth = 6;
+      kontekst.stroke();
+      kontekst.strokeStyle = 'white';
+      kontekst.lineWidth = 3;
+      kontekst.stroke();
+
+      kontekst.font = Math.round(ruuduSuurus * 0.25) + 'px Arial';
+      kontekst.textAlign = 'center';
+      kontekst.textBaseline = 'middle';
+      kontekst.fillStyle = 'white';
+      kontekst.strokeStyle = 'black';
+      kontekst.lineWidth = 4;
+
+      // Nummerdame ruudud vasakult paremale, ülevalt alla.
+      for (let rida = 0; rida < 3; rida++) {
+        for (let veerg = 0; veerg < 3; veerg++) {
+          const number = rida * 3 + veerg + 1;
+          const x = algusX + (veerg + 0.5) * ruuduSuurus;
+          const y = algusY + (rida + 0.5) * ruuduSuurus;
+
+          kontekst.strokeText(String(number), x, y);
+          kontekst.fillText(String(number), x, y);
+        }
+      }
+    }
+  </script>
+</body>
+</html>
