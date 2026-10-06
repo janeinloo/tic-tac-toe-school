@@ -65,12 +65,13 @@
     <p><strong>Sina mängid SINISEGA ja alustad mängu.</strong></p>
     <ol>
       <li>Aseta SININE nupp vabasse ruutu.</li>
-      <li>Oota, kuni kaamera tuvastab mänguseisu.</li>
-      <li>Vajuta nuppu „Küsi arvuti käiku“.</li>
-      <li>Aseta ORANŽ nupp ruutu, mida arvuti soovitab.</li>
-      <li>Seejärel tee järgmine SININE käik.</li>
+      <li>Oota, kuni arvuti kuvab ORANŽI käigu.</li>
+      <li>Aseta ORANŽ nupp näidatud ruutu.</li>
+      <li>Oota, kuni süsteem ütleb, et on jälle SINISE kord.</li>
+      <li>Tee järgmine SININE käik.</li>
     </ol>
-    <p>Uue mängu alustamiseks eemalda kõik SINISED ja ORANŽID nupud mängulaualt.
+    <p>Mängimise ajal ei ole vaja ühtegi nuppu vajutada.</p>
+    <p>Uue mängu alustamiseks eemalda pärast mängu lõppu kõik SINISED ja ORANŽID nupud mängulaualt.
       Oota, kuni kaamera näitab kõiki ruute TÜHJANA.</p>
   </section>
   <button id="kaameraNupp" type="button">Käivita kaamera</button>
@@ -88,8 +89,7 @@
   <h2>Tuvastatud mänguseis</h2>
   <pre id="tulemused" aria-label="Üheksa ruudu tuvastatud värvid"></pre>
 
-  <button id="saadaNupp" type="button">Küsi arvuti käiku</button>
-  <p id="serveriTeade" role="status">Pärast SINIST käiku vajuta „Küsi arvuti käiku“.</p>
+  <p id="serveriTeade" role="status">Tee esimene SININE käik.</p>
 
   <script>
     const SERVERI_URL = 'https://script.google.com/macros/s/AKfycbzHaSySThymhOgwdfLol4fOWVnxnhv-EO9z8kGGQzfa2pERWJooSvsP5WJ6wftgdKhXQQ/exec';
@@ -101,12 +101,18 @@
     const kaameraNupp = document.getElementById('kaameraNupp');
     const teade = document.getElementById('teade');
     const tulemused = document.getElementById('tulemused');
-    const saadaNupp = document.getElementById('saadaNupp');
     const serveriTeade = document.getElementById('serveriTeade');
 
     // Massiivi kohad 0–8 vastavad ruutudele 1–9.
     // S = sinine, O = oranž, tühi tekst = tühi ruut.
     let mangulaud = ["", "", "", "", "", "", "", "", ""];
+
+    // Automaatne saatmine kasutab ainult kinnitatud mänguseisu.
+    let viimatiSaadetudSeis = null;
+    let saatminePooleli = false;
+    let mangLoppenud = false;
+    // Mängu number aitab pärast laua tühjendamist vana päringu vastust eirata.
+    let manguNumber = 0;
 
     // Igal ruudul on oma viimati nähtud värv ja järjestikuste kaadrite arv.
     // Alguses pole üheski ruudus veel ühtegi kaadrit loetud.
@@ -119,25 +125,53 @@
     const oranziRoheliseVahe = 20;
 
     kaameraNupp.addEventListener('click', kaivitaKaamera);
-    saadaNupp.addEventListener('click', saadaManguseis);
     kuvaSeis();
 
+    function kontrolliAutomaatsetSaatmist() {
+      const laudTyhi = mangulaud.every(function (varv) {
+        return varv === '';
+      });
+
+      if (laudTyhi) {
+        // Tühja lauda ei saadeta. Nuppude eemaldamine lubab alustada uut mängu.
+        if (viimatiSaadetudSeis !== null || mangLoppenud) {
+          manguNumber++;
+          viimatiSaadetudSeis = null;
+          mangLoppenud = false;
+        }
+        serveriTeade.textContent = 'Tee esimene SININE käik.';
+        return;
+      }
+
+      if (saatminePooleli || mangLoppenud) return;
+
+      const seis = JSON.stringify(mangulaud);
+      if (seis === viimatiSaadetudSeis) return;
+
+      // Märgime ka saatmiskatse meelde: ühendusviga ei tekita iga kaadri päringut.
+      viimatiSaadetudSeis = seis;
+      saadaManguseis();
+    }
+
     async function saadaManguseis() {
+      if (saatminePooleli || mangLoppenud) return;
       if (SERVERI_URL === 'SIIA_APPS_SCRIPT_WEB_APP_URL') {
         serveriTeade.textContent = 'Lisa kõigepealt SERVERI_URL konstanti Apps Scripti Web Appi aadress.';
         return;
       }
 
-      saadaNupp.disabled = true;
-      serveriTeade.textContent = 'Saadan mänguseisu serverisse…';
+      saatminePooleli = true;
+      const saadetavMangulaud = mangulaud.slice();
+      const paringuManguNumber = manguNumber;
+      serveriTeade.textContent = 'Ootan arvuti vastust…';
 
       try {
-        // JSON.stringify salvestab nupuvajutuse hetkel kinnitatud mänguseisu.
+        // Koopia säilitab päringu alguse seisu, kuigi kaamera töötab edasi.
         // text/plain väldib eri päritoluga päringu OPTIONS-eelpäringut.
         const vastus = await fetch(SERVERI_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-          body: JSON.stringify({ mangulaud: mangulaud }),
+          body: JSON.stringify({ mangulaud: saadetavMangulaud }),
           credentials: 'omit',
           redirect: 'follow'
         });
@@ -148,6 +182,8 @@
 
         // Loeme serveri kinnitust; saatmine üksi ei tõesta vastuvõtmist.
         const andmed = await vastus.json();
+        // Vana mängu vastus ei tohi uue mängu teadet ega olekut muuta.
+        if (paringuManguNumber !== manguNumber) return;
         if (typeof andmed.ok !== 'boolean' || typeof andmed.teade !== 'string') {
           throw new Error('Serveri vastus ei ole oodatud kujul. Kontrolli Web Appi URL-i ja avaldatud versiooni.');
         }
@@ -165,7 +201,7 @@
           }
           soovitus = 'Arvuti soovitab panna ORANŽI ruutu ' + andmed.arvutiKaik + '.';
         } else if (andmed.olek === 'INIMESE_KAIK') {
-          soovitus = 'Tee kõigepealt SININE käik ja saada mänguseis uuesti serverisse.';
+          soovitus = 'ORANŽ on tuvastatud. Tee järgmine SININE käik.';
         } else if (andmed.olek === 'S_VOIT') {
           soovitus = 'Mäng läbi – SININE võitis!';
         } else if (andmed.olek === 'O_VOIT') {
@@ -178,12 +214,18 @@
           throw new Error('Serveri vastuses puudub korrektne olek. Avalda Apps Scripti uus versioon.');
         }
 
+        if (andmed.olek === 'S_VOIT' || andmed.olek === 'O_VOIT' || andmed.olek === 'VIIK') {
+          mangLoppenud = true;
+        }
         serveriTeade.textContent = soovitus;
       } catch (viga) {
+        if (paringuManguNumber !== manguNumber) return;
         serveriTeade.textContent = 'Saatmist ei saanud kinnitada: ' + viga.message +
           ' Kontrolli internetiühendust, /exec-aadressi ja Web Appi ligipääsu „Anyone”.';
       } finally {
-        saadaNupp.disabled = false;
+        saatminePooleli = false;
+        // Päringu ajal muutunud kinnitatud seis ei lähe kaduma.
+        kontrolliAutomaatsetSaatmist();
       }
     }
 
@@ -318,6 +360,8 @@
         }
       }
       kuvaSeis();
+      // Alles pärast kõigi üheksa ruudu värvide kinnitamist kontrollime saatmist.
+      kontrolliAutomaatsetSaatmist();
     }
 
     function maaraVarv(R, G, B) {
