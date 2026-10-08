@@ -10,7 +10,7 @@
       margin: 16px;
     }
 
-    button {
+    button, select {
       font-size: 18px;
       padding: 10px 16px;
     }
@@ -74,6 +74,10 @@
     <p>Uue mängu alustamiseks eemalda pärast mängu lõppu kõik SINISED ja ORANŽID nupud mängulaualt.
       Oota, kuni kaamera näitab kõiki ruute TÜHJANA.</p>
   </section>
+  <label for="kaameraValik">Vali kaamera</label>
+  <select id="kaameraValik">
+    <option value="">Automaatne valik (telefonis tagumine kaamera)</option>
+  </select>
   <button id="kaameraNupp" type="button">Käivita kaamera</button>
   <p id="teade" role="status">Vajuta nuppu ja luba brauseril kaamerat kasutada.</p>
 
@@ -99,6 +103,7 @@
     const canvas = document.getElementById('canvas');
     const kontekst = canvas.getContext('2d');
     const kaameraNupp = document.getElementById('kaameraNupp');
+    const kaameraValik = document.getElementById('kaameraValik');
     const teade = document.getElementById('teade');
     const tulemused = document.getElementById('tulemused');
     const serveriTeade = document.getElementById('serveriTeade');
@@ -124,8 +129,70 @@
     const oranziPunaseVahe = 30;
     const oranziRoheliseVahe = 20;
 
+    // Säilitame ühe joonistamissilmuse ID, et vahetamisel vana silmus peatada.
+    let kaadriId = null;
+    let kaameraKaivitub = false;
+
     kaameraNupp.addEventListener('click', kaivitaKaamera);
+    kaameraValik.addEventListener('change', function () {
+      // Enne esimest käivitamist valime ainult menüüs. Töötava kaamera vahetame kohe.
+      if (video.srcObject) kaivitaKaamera();
+    });
+    uuendaKaamerateNimekirja();
+    if (navigator.mediaDevices) {
+      // Näiteks Camo ühendamisel uuendame valikuid, küsimata uut kaameraluba.
+      navigator.mediaDevices.addEventListener('devicechange', function () {
+        uuendaKaamerateNimekirja();
+      });
+    }
     kuvaSeis();
+
+    async function uuendaKaamerateNimekirja(aktiivneDeviceId) {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+
+      try {
+        const seadmed = await navigator.mediaDevices.enumerateDevices();
+        const valitudId = aktiivneDeviceId || kaameraValik.value;
+        kaameraValik.innerHTML = '';
+
+        const automaatne = document.createElement('option');
+        automaatne.value = '';
+        automaatne.textContent = 'Automaatne valik (telefonis tagumine kaamera)';
+        kaameraValik.appendChild(automaatne);
+
+        let number = 0;
+        seadmed.forEach(function (seade) {
+          if (seade.kind !== 'videoinput') return;
+          number++;
+          const valik = document.createElement('option');
+          valik.value = seade.deviceId;
+          // Enne loa saamist võib nimetus olla peidetud.
+          valik.textContent = seade.label || 'Kaamera ' + number;
+          kaameraValik.appendChild(valik);
+        });
+
+        // Kui eelmine valik on alles, jätame selle valituks.
+        const olemas = Array.from(kaameraValik.options).some(function (valik) {
+          return valik.value === valitudId;
+        });
+        kaameraValik.value = olemas ? valitudId : '';
+      } catch (viga) {
+        teade.textContent = 'Kaamerate nimekirja lugemine ebaõnnestus: ' + viga.message;
+      }
+    }
+
+    function peataKaamera() {
+      if (kaadriId !== null) {
+        cancelAnimationFrame(kaadriId);
+        kaadriId = null;
+      }
+      if (video.srcObject) {
+        video.srcObject.getTracks().forEach(function (rada) {
+          rada.stop();
+        });
+        video.srcObject = null;
+      }
+    }
 
     function kontrolliAutomaatsetSaatmist() {
       const laudTyhi = mangulaud.every(function (varv) {
@@ -230,8 +297,11 @@
     }
 
     async function kaivitaKaamera() {
+      if (kaameraKaivitub) return;
+      kaameraKaivitub = true;
       // Väldime korduvat käivitamist, kuni kaamera loa küsimine kestab.
       kaameraNupp.disabled = true;
+      kaameraValik.disabled = true;
       teade.textContent = 'Ootan kaamera kasutamise luba…';
 
       try {
@@ -239,10 +309,15 @@
           throw new Error('Brauser ei toeta kaamera kasutamist. Ava rakendus HTTPS-aadressil sobivas brauseris.');
         }
 
-        // getUserMedia küsib kasutajalt loa.
-        // „environment” eelistab tagumist kaamerat, kuid lubab ka muud kaamerat.
+        // Vabastame vana kaamera enne uue avamist ja peatame vana kaadrisilmuse.
+        peataKaamera();
+        const valitudDeviceId = kaameraValik.value;
+        // Valitud kaamera puhul kasutame täpset ID-d. Automaatne valik eelistab tagumist kaamerat.
+        const videoValik = valitudDeviceId
+          ? { deviceId: { exact: valitudDeviceId } }
+          : { facingMode: 'environment' };
         const voog = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment' },
+          video: videoValik,
           audio: false
         });
 
@@ -252,18 +327,17 @@
 
         teade.textContent = 'Kaamera töötab. Suuna mängulaud ruudustiku sisse.';
         joonistaKaader();
+        // Pärast loa saamist saame näidata päris kaameranimesid ja aktiivset valikut.
+        const aktiivneDeviceId = voog.getVideoTracks()[0].getSettings().deviceId;
+        await uuendaKaamerateNimekirja(aktiivneDeviceId);
       } catch (viga) {
         // Näiteks võib kasutaja loa keelata või kaamera olla hõivatud.
         teade.textContent = 'Kaamera käivitamine ebaõnnestus: ' + viga.message;
+        peataKaamera();
+      } finally {
+        kaameraKaivitub = false;
         kaameraNupp.disabled = false;
-
-        // Kui video käivitamine ebaõnnestus, vabastame juba avatud kaamera.
-        if (video.srcObject) {
-          video.srcObject.getTracks().forEach(function (rada) {
-            rada.stop();
-          });
-          video.srcObject = null;
-        }
+        kaameraValik.disabled = false;
       }
     }
 
@@ -287,7 +361,7 @@
       }
 
       // Brauser kutsub sama funktsiooni uuesti järgmise kaadri jaoks.
-      requestAnimationFrame(joonistaKaader);
+      kaadriId = requestAnimationFrame(joonistaKaader);
     }
 
     function leiaManguala() {
